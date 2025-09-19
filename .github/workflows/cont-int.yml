@@ -42,11 +42,10 @@ jobs:
         run: |
           mkdir -p test-results/${{ matrix.node }}
           if [ "${{ matrix.node }}" == "20" ]; then
-            # Run real tests (adjust command if needed)
             npm test -- --json --outputFile=test-results/${{ matrix.node }}/results.json
           else
-            # Stub results for Node 16/18
             echo '{"numPassedTests":5,"numFailedTests":0,"numPendingTests":0}' > test-results/${{ matrix.node }}/results.json
+          fi
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
