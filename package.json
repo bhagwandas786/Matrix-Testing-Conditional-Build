@@ -1,10 +1,10 @@
 {
   "name": "github-actions-assignment",
   "version": "1.0.0",
-  "scripts": {
-    "lint": "echo 'Linting would check code here' || echo 'Linting completed'",
-    "test": "mkdir -p test-results && jest --runInBand"
-  },
+"scripts": {
+  "lint": "echo 'Linting would check code here' || echo 'Linting completed'",
+  "test": "mkdir -p test-results && jest --runInBand"
+}
   "devDependencies": {
     "jest": "^29.6.4"
   },
