@@ -6,7 +6,7 @@ on:
     tags: ["v*.*.*"]
   pull_request:
   schedule:
-    - cron: "0 2 * * *" # Nightly at 2 AM
+    - cron: "21 20 * * *" 
   workflow_dispatch:
     inputs:
       skip_build:
