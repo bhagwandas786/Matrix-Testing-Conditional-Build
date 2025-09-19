@@ -6,7 +6,7 @@ on:
     tags: ["v*.*.*"]
   pull_request:
   schedule:
-    - cron: "0 2 * * *"   # Nightly test run at 2 AM UTC
+    - cron: "0 2 * * *"
   workflow_dispatch:
     inputs:
       skip_build:
@@ -34,10 +34,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-
-      - name: Clean previous modules
-        run: |
-          rm -rf node_modules package-lock.json
 
       - name: Install dependencies
         run: npm install
@@ -68,9 +64,13 @@ jobs:
       - name: Concatenate results
         run: |
           mkdir -p test-results-summary
-          find downloaded-test-results -name "results.json" -exec cat {} \; | jq -s 'flatten' > test-results-summary/combined-results.json
+          if ls downloaded-test-results/*/results.json 1> /dev/null 2>&1; then
+            jq -s '[.[] | {numPassedTests, numFailedTests, numPendingTests}] | reduce .[] as $item (0; . + ($item.numPassedTests + $item.numFailedTests + $item.numPendingTests))' downloaded-test-results/*/results.json > test-results-summary/total-count.txt
+          else
+            echo 0 > test-results-summary/total-count.txt
+          fi
           
-          TOTAL_TESTS=$(jq 'length' test-results-summary/combined-results.json)
+          TOTAL_TESTS=$(cat test-results-summary/total-count.txt)
           echo "TOTAL_TESTS=$TOTAL_TESTS" >> $GITHUB_ENV
           echo "Total tests: $TOTAL_TESTS"
 
@@ -93,7 +93,14 @@ jobs:
 
       - name: Validate test count
         run: |
-          CURRENT_COUNT=$(jq 'length' test-results-summary/combined-results.json)
+          set -e
+          if [ ! -f test-results-summary/total-count.txt ]; then
+            echo "❌ total-count.txt not found! Setting count to 0."
+            CURRENT_COUNT=0
+          else
+            CURRENT_COUNT=$(cat test-results-summary/total-count.txt)
+          fi
+
           echo "Current test count: $CURRENT_COUNT"
           
           MIN_COUNT=5
@@ -102,6 +109,7 @@ jobs:
             exit 1
           else
             echo "✅ Test count meets minimum requirement: $CURRENT_COUNT >= $MIN_COUNT"
+          fi
 
   build:
     name: Build Project
