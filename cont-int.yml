@@ -1,0 +1,162 @@
+name: Matrix Testing & Conditional Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+  schedule:
+    - cron: "0 2 * * *"   # Nightly test run at 2 AM UTC
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: "Skip build step?"
+        required: false
+        default: "false"
+        type: boolean
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [16, 18, 20]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: |
+          mkdir -p test-results/${{ matrix.node }}
+          npm test -- --json --outputFile=test-results/${{ matrix.node }}/results.json
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.node }}
+          path: test-results/${{ matrix.node }}
+
+  summary:
+    name: Generate Test Summary
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          path: downloaded-test-results
+          merge-multiple: true
+
+      - name: Concatenate results
+        run: |
+          mkdir -p test-results-summary
+          # Combine all JSON files into a single array
+          find downloaded-test-results -name "results.json" -exec cat {} \; | jq -s 'flatten' > test-results-summary/combined-results.json
+          
+          # Count total tests
+          TOTAL_TESTS=$(jq 'length' test-results-summary/combined-results.json)
+          echo "TOTAL_TESTS=$TOTAL_TESTS" >> $GITHUB_ENV
+          echo "Total tests: $TOTAL_TESTS"
+
+      - name: Upload summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-summary
+          path: test-results-summary
+
+  regression-check:
+    name: Check Regression in Test Count
+    runs-on: ubuntu-latest
+    needs: summary
+    steps:
+      - name: Download summary
+        uses: actions/download-artifact@v4
+        with:
+          name: test-results-summary
+          path: test-results-summary
+
+      - name: Validate test count
+        run: |
+          CURRENT_COUNT=$(jq 'length' test-results-summary/combined-results.json)
+          echo "Current test count: $CURRENT_COUNT"
+          
+          MIN_COUNT=10  # Set your minimum test count threshold here
+          if [ "$CURRENT_COUNT" -lt "$MIN_COUNT" ]; then
+            echo "❌ Regression detected: Test count ($CURRENT_COUNT) is below minimum ($MIN_COUNT)"
+            exit 1
+          else
+            echo "✅ Test count meets minimum requirement: $CURRENT_COUNT >= $MIN_COUNT"
+          fi
+
+  build:
+    name: Build Project
+    runs-on: ubuntu-latest
+    needs: [test, summary, regression-check]
+    if: |
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) &&
+      (!contains(github.event.inputs.skip_build, 'true'))
+    environment:
+      name: production   # 👈 Manual approval required (set in repo settings > Environments)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: |
+          mkdir -p dist
+          npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-dist
+          path: dist
+
+  nightly-test:
+    name: Nightly Test (Node Current)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Current
+        uses: actions/setup-node@v4
+        with:
+          node-version: current
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: |
+          mkdir -p nightly-test-results
+          npm test -- --json --outputFile=nightly-test-results/results.json
+
+      - name: Upload nightly test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-test-results
+          path: nightly-test-results
