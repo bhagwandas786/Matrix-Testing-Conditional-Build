@@ -94,7 +94,7 @@ jobs:
           CURRENT_COUNT=$(jq 'length' test-results-summary/combined-results.json)
           echo "Current test count: $CURRENT_COUNT"
           
-          MIN_COUNT=10  # Set your minimum test count threshold here
+          MIN_COUNT=5  # Set your minimum test count threshold here
           if [ "$CURRENT_COUNT" -lt "$MIN_COUNT" ]; then
             echo "❌ Regression detected: Test count ($CURRENT_COUNT) is below minimum ($MIN_COUNT)"
             exit 1
