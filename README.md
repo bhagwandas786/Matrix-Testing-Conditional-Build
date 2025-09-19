@@ -6,7 +6,7 @@ FEATURES:
 
 - Matrix testing across Node.js versions 16, 18, and 20
 - Runs on every pull request and push to main or dev branches.
-- Runs nightly at 1 AM UTC on Node current and Ubuntu, generating `nightly-test-results/results.json`.
+- Runs nightly at 1 AM UTC on Node current and Ubuntu, generating `test-results/results.json`.
 - Conditional build on main branch or version tags
 - Artifact storage for test results and build outputs
 - Manual approval before publishing (optional)
