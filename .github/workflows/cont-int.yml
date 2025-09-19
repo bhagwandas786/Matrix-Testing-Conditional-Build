@@ -6,7 +6,7 @@ on:
     tags: ["v*.*.*"]
   pull_request:
   schedule:
-    - cron: "0 2 * * *"   # Nightly test run at 2 AM UTC
+    - cron: "0 2 * * *"
   workflow_dispatch:
     inputs:
       skip_build:
@@ -64,11 +64,9 @@ jobs:
       - name: Concatenate results
         run: |
           mkdir -p test-results-summary
-          # Combine all JSON files into a single array
-          find downloaded-test-results -name "results.json" -exec cat {} \; | jq -s 'flatten' > test-results-summary/combined-results.json
+          jq -s '[.[] | {numPassedTests, numFailedTests, numPendingTests}] | reduce .[] as $item (0; . + ($item.numPassedTests + $item.numFailedTests + $item.numPendingTests))' downloaded-test-results/*/results.json > test-results-summary/total-count.txt
           
-          # Count total tests
-          TOTAL_TESTS=$(jq 'length' test-results-summary/combined-results.json)
+          TOTAL_TESTS=$(cat test-results-summary/total-count.txt)
           echo "TOTAL_TESTS=$TOTAL_TESTS" >> $GITHUB_ENV
           echo "Total tests: $TOTAL_TESTS"
 
@@ -91,10 +89,10 @@ jobs:
 
       - name: Validate test count
         run: |
-          CURRENT_COUNT=$(jq 'length' test-results-summary/combined-results.json)
+          CURRENT_COUNT=$(cat test-results-summary/total-count.txt)
           echo "Current test count: $CURRENT_COUNT"
           
-          MIN_COUNT=5  # Set your minimum test count threshold here
+          MIN_COUNT=5
           if [ "$CURRENT_COUNT" -lt "$MIN_COUNT" ]; then
             echo "❌ Regression detected: Test count ($CURRENT_COUNT) is below minimum ($MIN_COUNT)"
             exit 1
@@ -110,7 +108,7 @@ jobs:
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) &&
       (!contains(github.event.inputs.skip_build, 'true'))
     environment:
-      name: production   # 👈 Manual approval required (set in repo settings > Environments)
+      name: production
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
