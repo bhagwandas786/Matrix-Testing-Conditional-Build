@@ -6,7 +6,7 @@ on:
     tags: ["v*.*.*"]
   pull_request:
   schedule:
-    - cron: "0 2 * * *"
+    - cron: "0 2 * * *"   # Nightly test run at 2 AM UTC
   workflow_dispatch:
     inputs:
       skip_build:
@@ -41,7 +41,7 @@ jobs:
       - name: Run tests
         run: |
           mkdir -p test-results/${{ matrix.node }}
-          npm test -- --json --outputFile=test-results/${{ matrix.node }}/results.json
+          npm test -- --runInBand --json --outputFile=test-results/${{ matrix.node }}/results.json
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -64,9 +64,11 @@ jobs:
       - name: Concatenate results
         run: |
           mkdir -p test-results-summary
-          jq -s '[.[] | {numPassedTests, numFailedTests, numPendingTests}] | reduce .[] as $item (0; . + ($item.numPassedTests + $item.numFailedTests + $item.numPendingTests))' downloaded-test-results/*/results.json > test-results-summary/total-count.txt
+          # Combine all JSON files into a single array
+          find downloaded-test-results -name "results.json" -exec cat {} \; | jq -s 'flatten' > test-results-summary/combined-results.json
           
-          TOTAL_TESTS=$(cat test-results-summary/total-count.txt)
+          # Count total tests
+          TOTAL_TESTS=$(jq 'length' test-results-summary/combined-results.json)
           echo "TOTAL_TESTS=$TOTAL_TESTS" >> $GITHUB_ENV
           echo "Total tests: $TOTAL_TESTS"
 
@@ -89,7 +91,7 @@ jobs:
 
       - name: Validate test count
         run: |
-          CURRENT_COUNT=$(cat test-results-summary/total-count.txt)
+          CURRENT_COUNT=$(jq 'length' test-results-summary/combined-results.json)
           echo "Current test count: $CURRENT_COUNT"
           
           MIN_COUNT=5
@@ -108,7 +110,7 @@ jobs:
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) &&
       (!contains(github.event.inputs.skip_build, 'true'))
     environment:
-      name: production
+      name: production   # Manual approval can be set in repo settings
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -151,7 +153,7 @@ jobs:
       - name: Run tests
         run: |
           mkdir -p nightly-test-results
-          npm test -- --json --outputFile=nightly-test-results/results.json
+          npm test -- --runInBand --json --outputFile=nightly-test-results/results.json
 
       - name: Upload nightly test results
         uses: actions/upload-artifact@v4
