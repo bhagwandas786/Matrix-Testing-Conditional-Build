@@ -22,7 +22,7 @@ cd <Matrix-Testing-Conditional-Build.git>>
 2. Install dependencies
 npm install
 
-3. Run tests
+3. Run test
 npm test
 
 4. Build the project
